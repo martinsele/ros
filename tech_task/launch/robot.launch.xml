@@ -1,0 +1,53 @@
+<launch>
+  <arg name="base"/>
+  <arg name="stacks"/>
+  <arg name="3d_sensor"/>
+  <arg name="x" default="0.0"/>
+  <arg name="y" default="0.0"/>
+  <arg name="z" default="0.3"/>
+  <arg name="name" default="robot"/>
+  <arg name="tf_prefix" default="$(optenv ROS_NAMESPACE)"/>
+  <arg name="world_frame" default="/map"/>
+  <arg name="base_link_frame" default="$(arg tf_prefix)/base_link"/>
+  <arg name="startPlanner" default="true"/>
+  <arg name="goal_x" default="0.0"/>
+  <arg name="goal_y" default="0.0"/>
+  
+  <arg name="urdf_file" default="$(find xacro)/xacro '$(find turtlebot_description)/robots/$(arg base)_$(arg stacks)_$(arg 3d_sensor).urdf.xacro'" />
+  <param name="/robot_description" command="$(arg urdf_file)" />
+
+  <param name="tf_prefix" type="string" value="$(arg tf_prefix)" />
+  <param name="base_link_frame" type="string" value="$(arg base_link_frame)"/>
+  <param name="world_frame" type="string" value="$(arg world_frame)"/>
+  
+  <!-- Gazebo model spawner -->
+  <node name="spawn_turtlebot_model" pkg="gazebo_ros" type="spawn_model"
+        args="-unpause -urdf -param /robot_description 
+	      -x $(arg x)
+              -y $(arg y)
+              -z $(arg z)
+              -model $(arg name)"/> 
+
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+    <param name="publish_frequency" type="double" value="30.0" />
+    <param name="tf_prefix" type="string" value="$(arg tf_prefix)"/>
+  </node>
+
+  <node if="$(arg startPlanner)" name="sweep_planner" pkg="tech_task" type="sweep_planner" output="screen">
+	<param name="robot_radius" type="double" value="0.4" />
+	<param name="goal_x" type="double" value="$(arg goal_x)" />
+	<param name="goal_y" type="double" value="$(arg goal_x)" />
+  </node>
+
+  <!-- Velocity muxer -->
+
+  <node pkg="nodelet" type="nodelet" name="mobile_base_nodelet_manager" args="manager"/>
+  <node pkg="nodelet" type="nodelet" name="cmd_vel_mux"
+        args="load yocs_cmd_vel_mux/CmdVelMuxNodelet mobile_base_nodelet_manager">
+    <param name="yaml_cfg_file" value="$(find turtlebot_bringup)/param/mux.yaml" />
+    <remap from="cmd_vel_mux/output" to="mobile_base/commands/velocity"/>
+  </node>
+
+  <!-- Bumper/cliff to pointcloud (not working, as it needs sensors/core messages) -->
+  <include file="$(find turtlebot_bringup)/launch/includes/kobuki/bumper2pc.launch.xml"/>
+</launch>
